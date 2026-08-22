@@ -358,7 +358,7 @@ function App() {
           </div>
 
           <h2 className="card-title">تسجيل الدخول</h2>
-          <p className="card-sub">ادخل بياناتك للوصول لداشبورد الجيم</p>
+          <p className="card-sub">ادخل بياناتك للوصول لواجهة اعضاء الجيم</p>
 
           <label>البريد الإلكتروني</label>
           <input
@@ -428,7 +428,7 @@ function App() {
       <div className="toolbar">
         <input
           type="text"
-          placeholder="🔍 دور بالاسم أو رقم الموبايل..."
+          placeholder="🔍 بحث بالاسم أو رقم الموبايل..."
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -441,8 +441,8 @@ function App() {
         <div className="empty-state">
           <div className="big">🏋️</div>
           {members.length === 0
-            ? "لسه مفيش أعضاء مسجلين. دوس \"+ إضافة عضو\" عشان تبدأ."
-            : "مفيش نتائج مطابقة."}
+            ? "لا يوجد أعضاء مسجلين. دوس \"+ إضافة عضو\" عشان تبدأ."
+            : "لا يوجد نتائج مطابقة."}
         </div>
       ) : (
         <div className="members-grid">
