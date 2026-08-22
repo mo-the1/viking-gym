@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VIKING GYM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Iceberg&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: rgba(255,255,255,0.04);
+    --surface-border: rgba(255,196,0,0.18);
+    --yellow: #FFC400;
+    --yellow-soft: rgba(255,196,0,0.12);
+    --text: #F5F5F0;
+    --muted: #8a8a82;
+    --green: #22c55e;
+    --orange: #f97316;
+    --red: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Tajawal', sans-serif;
+    min-height: 100vh;
+  }
+  #root { min-height: 100vh; }
+
+  /* ---------- Login Screen ---------- */
+  .wrap { display: flex; min-height: 100vh; }
+  .left {
+    flex: 1.1;
+    background: linear-gradient(160deg, #111111 0%, #0a0a0a 60%);
+    padding: 60px 56px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    clip-path: polygon(0 0, 100% 0, 88% 14%, 97% 34%, 84% 54%, 95% 76%, 80% 100%, 0 100%);
+  }
+  .left::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(255,196,0,0.07), transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(255,196,0,0.05), transparent 45%);
+    pointer-events: none;
+  }
+  .brand-row { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; }
+  .brand-name { font-family: 'Iceberg', sans-serif; font-size: 32px; letter-spacing: 3px; color: var(--yellow); }
+  .headline { font-family: 'Anton', sans-serif; font-size: 48px; line-height: 1.08; letter-spacing: 1px; margin: 0 0 18px; color: var(--text); }
+  .headline span { color: var(--yellow); }
+  .sub { color: var(--muted); font-size: 16px; line-height: 1.7; max-width: 400px; margin: 0 0 36px; }
+  .feature { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; color: #d8d8d0; font-size: 14px; }
+  .feature .dot {
+    width: 34px; height: 34px; border-radius: 8px; background: var(--surface);
+    border: 1px solid var(--surface-border); display: flex; align-items: center; justify-content: center;
+    font-size: 15px; flex-shrink: 0;
+  }
+  .right { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 24px; }
+  .login-card { width: 100%; max-width: 380px; }
+  .card-title { font-family: 'Anton', sans-serif; font-size: 26px; letter-spacing: 1px; margin: 0 0 6px; }
+  .card-sub { color: var(--muted); font-size: 14px; margin: 0 0 28px; }
+  .foot { text-align: center; color: #4a4a44; font-size: 12px; margin-top: 24px; }
+  .mobile-brand { display: none; align-items: center; gap: 10px; justify-content: center; margin-bottom: 24px; }
+  @media (max-width: 860px) {
+    .left { display: none; }
+    .right { padding: 24px; }
+    .mobile-brand { display: flex !important; }
+  }
+
+  /* ---------- Shared form elements ---------- */
+  label { display: block; font-size: 12px; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 8px; font-weight: 700; }
+  input, textarea {
+    width: 100%; background: var(--surface); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px; padding: 13px 16px; color: var(--text); font-family: 'Tajawal', sans-serif;
+    font-size: 15px; margin-bottom: 18px; outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  input:focus, textarea:focus { border-color: var(--yellow); box-shadow: 0 0 0 3px var(--yellow-soft); }
+  input::placeholder, textarea::placeholder { color: #5a5a54; }
+  textarea { resize: vertical; min-height: 70px; }
+  input[type="date"] { color-scheme: dark; }
+
+  button {
+    width: 100%; background: var(--yellow); color: #141200; border: none; border-radius: 10px;
+    padding: 14px; font-family: 'Tajawal', sans-serif; font-weight: 900; font-size: 15px; cursor: pointer;
+    box-shadow: 0 6px 20px rgba(255,196,0,0.3); transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+  }
+  button:hover { transform: translateY(-1px); box-shadow: 0 8px 26px rgba(255,196,0,0.4); }
+  button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+  button.secondary { background: transparent; border: 1px solid rgba(255,255,255,0.15); color: var(--text); box-shadow: none; }
+  button.danger-btn { background: transparent; border: 1px solid rgba(239,68,68,0.4); color: #f87171; box-shadow: none; }
+  button.small { width: auto; padding: 9px 16px; font-size: 12.5px; }
+  .error-text { color: #f87171; font-size: 13px; margin: -8px 0 14px; }
+
+  /* ---------- Dashboard ---------- */
+  .container { max-width: 980px; margin: 0 auto; padding: 24px 20px 60px; }
+  .loading-center { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--muted); }
+
+  .app-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; flex-wrap: wrap; gap: 12px; }
+  .app-header .brand-name { font-size: 26px; }
+  .app-header .sub-line { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+
+  .stat-hero { text-align: center; padding: 26px 20px 8px; }
+  .stat-number { font-family: 'Anton', sans-serif; font-size: 60px; color: var(--yellow); text-shadow: 0 0 30px rgba(255,196,0,0.45); line-height: 1; }
+  .stat-label { color: var(--muted); font-size: 13.5px; margin-top: 6px; letter-spacing: 0.5px; }
+
+  .chips-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 22px 0 26px; }
+  .chip {
+    background: var(--surface); border: 1px solid rgba(255,255,255,0.08); color: var(--muted);
+    padding: 9px 18px; border-radius: 20px; font-size: 13px; cursor: pointer; font-weight: 700;
+    transition: all .15s; white-space: nowrap;
+  }
+  .chip.active-all { border-color: var(--yellow); color: var(--yellow); background: var(--yellow-soft); }
+  .chip.active-warn { border-color: var(--orange); color: var(--orange); background: rgba(249,115,22,0.12); }
+  .chip.active-danger { border-color: var(--red); color: var(--red); background: rgba(239,68,68,0.12); }
+
+  .toolbar { display: flex; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
+  .toolbar input { flex: 1; min-width: 180px; margin-bottom: 0; }
+  .btn-add { width: auto; white-space: nowrap; padding: 13px 22px; }
+
+  .members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+
+  .member-card { background: var(--surface); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 18px; transition: border-color .2s; }
+  .member-card:hover { border-color: rgba(255,196,0,0.25); }
+  .member-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+  .member-name { font-weight: 900; font-size: 17px; color: var(--text); }
+  .member-phone-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 13px; color: var(--muted); }
+  .icon-link { text-decoration: none; font-size: 15px; }
+
+  .badge { font-size: 11px; font-weight: 900; padding: 5px 11px; border-radius: 20px; border: 1px solid; white-space: nowrap; flex-shrink: 0; }
+
+  .member-dates { font-size: 13px; color: #c8c8c0; display: flex; flex-direction: column; gap: 3px; margin: 10px 0 8px; }
+  .days-left { font-weight: 900; font-size: 14px; margin-top: 4px; }
+
+  .member-notes { font-size: 12.5px; color: var(--muted); background: rgba(255,255,255,0.03); border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; line-height: 1.6; }
+
+  .member-actions { display: flex; gap: 8px; margin-top: 4px; }
+  .member-actions button { flex: 1; padding: 9px; border-radius: 8px; }
+
+  .empty-state { text-align: center; padding: 50px 20px; color: var(--muted); }
+  .empty-state .big { font-size: 32px; margin-bottom: 10px; }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex;
+    align-items: center; justify-content: center; padding: 20px; z-index: 50;
+  }
+  .modal { background: #141414; border: 1px solid var(--surface-border); border-radius: 16px; padding: 26px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto; }
+  .modal h3 { font-family: 'Anton', sans-serif; letter-spacing: 1px; margin: 0 0 20px; font-size: 20px; color: var(--yellow); }
+  .modal-actions { display: flex; gap: 10px; margin-top: 6px; }
+  .modal-preview { background: var(--yellow-soft); border: 1px solid var(--surface-border); border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; font-size: 13.5px; color: #ffe89a; }
+  .confirm-text { font-size: 15px; text-align: center; line-height: 1.7; color: var(--text); margin: 0 0 22px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const SUPABASE_URL = "https://mfrveljsifglheyrmgbi.supabase.co";
+const SUPABASE_KEY = "sb_publishable_15xYpC6dNvCzbvUi9vuPfQ__xOua0NS";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ---------- Date helpers ----------
+function getLocalDateStr(d = new Date()) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+function addDays(dateStr, days) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + Number(days || 0));
+  return getLocalDateStr(d);
+}
+function daysRemaining(endDateStr) {
+  const today = new Date(getLocalDateStr() + 'T00:00:00');
+  const end = new Date(endDateStr + 'T00:00:00');
+  return Math.round((end - today) / 86400000);
+}
+function getStatus(endDateStr) {
+  const dr = daysRemaining(endDateStr);
+  if (dr < 0) return { key: 'expired', label: 'منتهي', color: '#ef4444', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)' };
+  if (dr <= 7) return { key: 'expiring', label: 'هيجدد قريب', color: '#f97316', bg: 'rgba(249,115,22,0.12)', border: 'rgba(249,115,22,0.3)' };
+  return { key: 'active', label: 'نشط', color: '#22c55e', bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.3)' };
+}
+function toWhatsAppLink(phone) {
+  let digits = (phone || '').replace(/\D/g, '');
+  if (digits.startsWith('0')) digits = '20' + digits.slice(1);
+  return `https://wa.me/${digits}`;
+}
+
+function App() {
+  // ---- Auth state ----
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  // ---- Members state ----
+  const [members, setMembers] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all"); // all | expiring | expired
+
+  // ---- Add/Edit form ----
+  const [showForm, setShowForm] = useState(false);
+  const [editingMember, setEditingMember] = useState(null);
+  const [formData, setFormData] = useState({ name: "", phone: "", subscription_days: "30", start_date: getLocalDateStr(), notes: "" });
+  const [saving, setSaving] = useState(false);
+
+  // ---- Renew modal ----
+  const [renewingMember, setRenewingMember] = useState(null);
+  const [renewDays, setRenewDays] = useState("30");
+
+  // ---- Delete confirm ----
+  const [confirmAction, setConfirmAction] = useState(null);
+
+  // ---- Auth lifecycle ----
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (session) loadMembers();
+  }, [session]);
+
+  const handleLogin = async () => {
+    setLoginError("");
+    if (!loginEmail.trim() || !loginPassword.trim()) return;
+    setLoginLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginEmail.trim(),
+      password: loginPassword
+    });
+    if (error) setLoginError("بيانات الدخول غير صحيحة");
+    setLoginLoading(false);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setMembers([]);
+  };
+
+  // ---- Members CRUD ----
+  const loadMembers = async () => {
+    setLoadingMembers(true);
+    const { data, error } = await supabase.from("members").select("*").order("end_date", { ascending: true });
+    if (!error) setMembers(data || []);
+    setLoadingMembers(false);
+  };
+
+  const openAddForm = () => {
+    setEditingMember(null);
+    setFormData({ name: "", phone: "", subscription_days: "30", start_date: getLocalDateStr(), notes: "" });
+    setShowForm(true);
+  };
+
+  const openEditForm = (m) => {
+    setEditingMember(m);
+    setFormData({
+      name: m.name || "",
+      phone: m.phone || "",
+      subscription_days: String(m.subscription_days || 30),
+      start_date: m.start_date || getLocalDateStr(),
+      notes: m.notes || ""
+    });
+    setShowForm(true);
+  };
+
+  const handleSaveMember = async () => {
+    if (!formData.name.trim() || !formData.phone.trim()) return;
+    const days = parseInt(formData.subscription_days) || 30;
+    const start = formData.start_date || getLocalDateStr();
+    const end = addDays(start, days);
+    setSaving(true);
+    const payload = {
+      name: formData.name.trim(),
+      phone: formData.phone.trim(),
+      subscription_days: days,
+      start_date: start,
+      end_date: end,
+      notes: formData.notes || ""
+    };
+    let error;
+    if (editingMember) {
+      ({ error } = await supabase.from("members").update(payload).eq("id", editingMember.id));
+    } else {
+      ({ error } = await supabase.from("members").insert(payload));
+    }
+    setSaving(false);
+    if (error) { alert("خطأ: " + error.message); return; }
+    setShowForm(false);
+    setEditingMember(null);
+    await loadMembers();
+  };
+
+  const handleDeleteMember = async (id) => {
+    setSaving(true);
+    const { error } = await supabase.from("members").delete().eq("id", id);
+    setSaving(false);
+    setConfirmAction(null);
+    if (error) { alert("خطأ: " + error.message); return; }
+    await loadMembers();
+  };
+
+  const openRenew = (m) => {
+    setRenewingMember(m);
+    setRenewDays(String(m.subscription_days || 30));
+  };
+
+  const handleConfirmRenew = async () => {
+    const days = parseInt(renewDays) || renewingMember.subscription_days || 30;
+    const start = getLocalDateStr();
+    const end = addDays(start, days);
+    setSaving(true);
+    const { error } = await supabase.from("members")
+      .update({ start_date: start, end_date: end, subscription_days: days })
+      .eq("id", renewingMember.id);
+    setSaving(false);
+    if (error) { alert("خطأ: " + error.message); return; }
+    setRenewingMember(null);
+    await loadMembers();
+  };
+
+  // ---- Auth gates ----
+  if (authLoading) {
+    return <div className="loading-center">جاري التحميل...</div>;
+  }
+
+  if (!session) {
+    return (
+      <div className="wrap">
+        <div className="left">
+          <div className="brand-row">
+            <div className="brand-name">VIKING GYM</div>
+          </div>
+          <h1 className="headline">تحكم كامل<br />في <span>أعضاء الجيم</span><br />من مكان واحد</h1>
+          <p className="sub">تابع الاشتراكات، مواعيد التجديد، وبيانات كل عضو من داشبورد واحد بسيط وسريع.</p>
+          <div className="feature"><div className="dot">👥</div> متابعة كل الأعضاء وحالة اشتراكهم</div>
+          <div className="feature"><div className="dot">⏳</div> تنبيه لوني لمين هيجدد قريب</div>
+          <div className="feature"><div className="dot">🔄</div> تجديد الاشتراك بضغطة واحدة</div>
+        </div>
+        <div className="right">
+          <div className="login-card">
+            <div className="mobile-brand">
+              <div className="brand-name">VIKING GYM</div>
+            </div>
+            <h2 className="card-title">تسجيل الدخول</h2>
+            <p className="card-sub">ادخل بياناتك للوصول لداشبورد الجيم</p>
+
+            <label>البريد الإلكتروني</label>
+            <input
+              type="email"
+              placeholder="أدخل البريد الإلكتروني"
+              value={loginEmail}
+              onChange={e => setLoginEmail(e.target.value)}
+            />
+            <label>كلمة المرور</label>
+            <input
+              type="password"
+              placeholder="أدخل كلمة المرور"
+              value={loginPassword}
+              onChange={e => setLoginPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+            />
+            {loginError && <p className="error-text">{loginError}</p>}
+            <button onClick={handleLogin} disabled={loginLoading}>
+              {loginLoading ? "جاري الدخول..." : "دخول"}
+            </button>
+            <p className="foot">© 2026 VIKING GYM — نظام إدارة الأعضاء</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Dashboard data ----
+  const activeCount = members.filter(m => getStatus(m.end_date).key === 'active').length;
+  const expiringCount = members.filter(m => getStatus(m.end_date).key === 'expiring').length;
+  const expiredCount = members.filter(m => getStatus(m.end_date).key === 'expired').length;
+
+  const filteredMembers = members
+    .filter(m => filter === 'all' ? true : getStatus(m.end_date).key === filter)
+    .filter(m => {
+      const q = search.trim();
+      if (!q) return true;
+      return m.name.includes(q) || (m.phone || "").includes(q);
+    });
+
+  return (
+    <div className="container">
+      <div className="app-header">
+        <div>
+          <div className="brand-name">VIKING GYM</div>
+          <div className="sub-line">نظام إدارة الأعضاء</div>
+        </div>
+        <button className="small secondary" onClick={handleLogout}>خروج</button>
+      </div>
+
+      <div className="stat-hero">
+        <div className="stat-number">{activeCount}</div>
+        <div className="stat-label">عضو نشط الآن</div>
+      </div>
+
+      <div className="chips-row">
+        <span className={"chip" + (filter === 'all' ? ' active-all' : '')} onClick={() => setFilter('all')}>
+          الكل ({members.length})
+        </span>
+        <span className={"chip" + (filter === 'expiring' ? ' active-warn' : '')} onClick={() => setFilter('expiring')}>
+          هيجدد قريب ({expiringCount})
+        </span>
+        <span className={"chip" + (filter === 'expired' ? ' active-danger' : '')} onClick={() => setFilter('expired')}>
+          منتهي ({expiredCount})
+        </span>
+      </div>
+
+      <div className="toolbar">
+        <input
+          type="text"
+          placeholder="🔍 دور بالاسم أو رقم الموبايل..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        <button className="btn-add" onClick={openAddForm}>+ إضافة عضو</button>
+      </div>
+
+      {loadingMembers ? (
+        <div className="empty-state">جاري تحميل الأعضاء...</div>
+      ) : filteredMembers.length === 0 ? (
+        <div className="empty-state">
+          <div className="big">🏋️</div>
+          {members.length === 0
+            ? "لسه مفيش أعضاء مسجلين. دوس \"+ إضافة عضو\" عشان تبدأ."
+            : "مفيش نتائج مطابقة."}
+        </div>
+      ) : (
+        <div className="members-grid">
+          {filteredMembers.map(m => {
+            const status = getStatus(m.end_date);
+            const dr = daysRemaining(m.end_date);
+            return (
+              <div className="member-card" key={m.id}>
+                <div className="member-top">
+                  <div>
+                    <div className="member-name">{m.name}</div>
+                    <div className="member-phone-row">
+                      <a href={"tel:" + m.phone} className="icon-link" title="اتصال">📞</a>
+                      <a href={toWhatsAppLink(m.phone)} target="_blank" rel="noreferrer" className="icon-link" title="واتساب">💬</a>
+                      <span>{m.phone}</span>
+                    </div>
+                  </div>
+                  <span className="badge" style={{ color: status.color, background: status.bg, borderColor: status.border }}>
+                    {status.label}
+                  </span>
+                </div>
+
+                <div className="member-dates">
+                  <div><span style={{ color: "var(--muted)" }}>بداية:</span> {m.start_date}</div>
+                  <div><span style={{ color: "var(--muted)" }}>نهاية:</span> {m.end_date}</div>
+                  <div className="days-left" style={{ color: status.color }}>
+                    {status.key === 'expired' ? `منتهي من ${Math.abs(dr)} يوم` : `متبقي ${dr} يوم`}
+                  </div>
+                </div>
+
+                {m.notes && <div className="member-notes">📝 {m.notes}</div>}
+
+                <div className="member-actions">
+                  <button className="small" onClick={() => openRenew(m)}>🔄 تجديد</button>
+                  <button className="small secondary" onClick={() => openEditForm(m)}>✏️ تعديل</button>
+                  <button
+                    className="small danger-btn"
+                    onClick={() => setConfirmAction({
+                      message: `متأكد إنك عايز تمسح "${m.name}" نهائياً؟`,
+                      onConfirm: () => handleDeleteMember(m.id)
+                    })}
+                  >🗑️ حذف</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ---- Add / Edit modal ---- */}
+      {showForm && (
+        <div className="overlay" onClick={() => setShowForm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3>{editingMember ? "تعديل بيانات العضو" : "إضافة عضو جديد"}</h3>
+            <label>الاسم بالكامل</label>
+            <input placeholder="اسم العضو" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+            <label>رقم الموبايل</label>
+            <input placeholder="01xxxxxxxxx" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
+            <label>تاريخ بداية الاشتراك</label>
+            <input type="date" value={formData.start_date} onChange={e => setFormData({ ...formData, start_date: e.target.value })} />
+            <label>مدة الاشتراك (بالأيام)</label>
+            <input type="number" min="1" placeholder="30" value={formData.subscription_days} onChange={e => setFormData({ ...formData, subscription_days: e.target.value })} />
+            <label>ملاحظات (اختياري)</label>
+            <textarea rows="2" placeholder="أي ملاحظات عن العضو..." value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
+            <div className="modal-actions">
+              <button className="secondary" onClick={() => setShowForm(false)}>إلغاء</button>
+              <button onClick={handleSaveMember} disabled={saving}>
+                {saving ? "جاري الحفظ..." : "حفظ"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Renew modal ---- */}
+      {renewingMember && (
+        <div className="overlay" onClick={() => setRenewingMember(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3>تجديد اشتراك: {renewingMember.name}</h3>
+            <label>مدة التجديد (بالأيام)</label>
+            <input type="number" min="1" value={renewDays} onChange={e => setRenewDays(e.target.value)} />
+            <div className="modal-preview">
+              الاشتراك هيبدأ من النهاردة ({getLocalDateStr()}) وهينتهي في {addDays(getLocalDateStr(), parseInt(renewDays) || 0)}
+            </div>
+            <div className="modal-actions">
+              <button className="secondary" onClick={() => setRenewingMember(null)}>إلغاء</button>
+              <button onClick={handleConfirmRenew} disabled={saving}>
+                {saving ? "جاري التجديد..." : "تأكيد التجديد"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Delete confirmation ---- */}
+      {confirmAction && (
+        <div className="overlay" onClick={() => setConfirmAction(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <p className="confirm-text">{confirmAction.message}</p>
+            <div className="modal-actions">
+              <button className="secondary" onClick={() => setConfirmAction(null)}>إلغاء</button>
+              <button
+                onClick={confirmAction.onConfirm}
+                disabled={saving}
+                style={{ background: "linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)", color: "#fff", boxShadow: "0 4px 15px rgba(239,68,68,0.4)" }}
+              >
+                {saving ? "..." : "نعم، احذف"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>
