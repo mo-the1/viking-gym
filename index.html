@@ -24,12 +24,17 @@
     --red: #ef4444;
   }
   * { box-sizing: border-box; }
+  
+  /* تم إضافة خصائص تنعيم الخطوط هنا */
   html, body {
     margin: 0; padding: 0;
     background: var(--bg);
     color: var(--text);
     font-family: 'Tajawal', sans-serif;
     min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   #root { min-height: 100vh; }
 
@@ -138,6 +143,11 @@
   .empty-state { text-align: center; padding: 50px 20px; color: var(--muted); }
   .empty-state .big { font-size: 32px; margin-bottom: 10px; }
 
+  /* زر تحميل المزيد */
+  .load-more-container { text-align: center; margin-top: 30px; }
+  .btn-load-more { background: transparent; border: 1px solid rgba(255,196,0,0.4); color: var(--yellow); padding: 12px 30px; border-radius: 30px; width: auto; margin: 0 auto; display: inline-block; box-shadow: none; }
+  .btn-load-more:hover { background: var(--yellow-soft); }
+
   .overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex;
     align-items: center; justify-content: center; padding: 20px; z-index: 50;
@@ -210,11 +220,22 @@ function App() {
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
-  // ---- Members state ----
+  // ---- Members & Pagination state ----
   const [members, setMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  
+  // Search & Filter
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all"); // all | expiring | expired
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [filter, setFilter] = useState("all"); 
+
+  // Pagination
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const PAGE_SIZE = 20;
+
+  // Server-Side Stats
+  const [stats, setStats] = useState({ all: 0, active: 0, expiring: 0, expired: 0 });
 
   // ---- Add/Edit form ----
   const [showForm, setShowForm] = useState(false);
@@ -241,9 +262,21 @@ function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  // ---- Debounce Search Input ----
   useEffect(() => {
-    if (session) loadMembers();
-  }, [session]);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // ---- Load Data when Session, Filter, or Search changes ----
+  useEffect(() => {
+    if (session) {
+      loadStats();
+      loadMembers(false, filter, debouncedSearch);
+    }
+  }, [session, filter, debouncedSearch]);
 
   const handleLogin = async () => {
     setLoginError("");
@@ -262,14 +295,69 @@ function App() {
     setMembers([]);
   };
 
-  // ---- Members CRUD ----
-  const loadMembers = async () => {
-    setLoadingMembers(true);
-    const { data, error } = await supabase.from("members").select("*").order("end_date", { ascending: true });
-    if (!error) setMembers(data || []);
+  // ---- Data Fetching (Server-Side) ----
+  const loadStats = async () => {
+    const today = getLocalDateStr();
+    const nextWeek = addDays(today, 7);
+
+    const [resAll, resExpired, resExpiring, resActive] = await Promise.all([
+      supabase.from('members').select('*', { count: 'exact', head: true }),
+      supabase.from('members').select('*', { count: 'exact', head: true }).lt('end_date', today),
+      supabase.from('members').select('*', { count: 'exact', head: true }).gte('end_date', today).lte('end_date', nextWeek),
+      supabase.from('members').select('*', { count: 'exact', head: true }).gt('end_date', nextWeek)
+    ]);
+
+    setStats({
+      all: resAll.count || 0,
+      expired: resExpired.count || 0,
+      expiring: resExpiring.count || 0,
+      active: resActive.count || 0
+    });
+  };
+
+  const loadMembers = async (isAppend = false, currentFilter = filter, currentSearch = debouncedSearch) => {
+    if (!isAppend) setLoadingMembers(true);
+    
+    const p = isAppend ? page + 1 : 0;
+    const today = getLocalDateStr();
+    const nextWeek = addDays(today, 7);
+
+    let q = supabase.from('members').select('*');
+
+    // Apply Filters via Supabase
+    if (currentFilter === 'expired') {
+      q = q.lt('end_date', today);
+    } else if (currentFilter === 'expiring') {
+      q = q.gte('end_date', today).lte('end_date', nextWeek);
+    }
+
+    // Apply Search via Supabase
+    if (currentSearch.trim()) {
+      const s = currentSearch.replace(/,/g, '').trim(); 
+      q = q.or(`name.ilike.%${s}%,phone.ilike.%${s}%`);
+    }
+
+    // Pagination Limit
+    const start = p * PAGE_SIZE;
+    const end = start + PAGE_SIZE - 1;
+    
+    q = q.order('end_date', { ascending: true }).range(start, end);
+
+    const { data, error } = await q;
+
+    if (!error && data) {
+      if (isAppend) {
+        setMembers(prev => [...prev, ...data]);
+      } else {
+        setMembers(data);
+      }
+      setHasMore(data.length === PAGE_SIZE);
+      setPage(p);
+    }
     setLoadingMembers(false);
   };
 
+  // ---- Form Actions ----
   const openAddForm = () => {
     setEditingMember(null);
     setFormData({ name: "", phone: "", subscription_days: "30", start_date: getLocalDateStr(), notes: "" });
@@ -293,6 +381,7 @@ function App() {
     const days = parseInt(formData.subscription_days) || 30;
     const start = formData.start_date || getLocalDateStr();
     const end = addDays(start, days);
+    
     setSaving(true);
     const payload = {
       name: formData.name.trim(),
@@ -302,17 +391,23 @@ function App() {
       end_date: end,
       notes: formData.notes || ""
     };
+    
     let error;
     if (editingMember) {
       ({ error } = await supabase.from("members").update(payload).eq("id", editingMember.id));
     } else {
       ({ error } = await supabase.from("members").insert(payload));
     }
+    
     setSaving(false);
     if (error) { alert("خطأ: " + error.message); return; }
+    
     setShowForm(false);
     setEditingMember(null);
-    await loadMembers();
+    
+    // Refresh fully
+    await loadStats();
+    await loadMembers(false, filter, debouncedSearch);
   };
 
   const handleDeleteMember = async (id) => {
@@ -321,7 +416,9 @@ function App() {
     setSaving(false);
     setConfirmAction(null);
     if (error) { alert("خطأ: " + error.message); return; }
-    await loadMembers();
+    
+    await loadStats();
+    await loadMembers(false, filter, debouncedSearch);
   };
 
   const openRenew = (m) => {
@@ -333,14 +430,18 @@ function App() {
     const days = parseInt(renewDays) || renewingMember.subscription_days || 30;
     const start = getLocalDateStr();
     const end = addDays(start, days);
+    
     setSaving(true);
     const { error } = await supabase.from("members")
       .update({ start_date: start, end_date: end, subscription_days: days })
       .eq("id", renewingMember.id);
+    
     setSaving(false);
     if (error) { alert("خطأ: " + error.message); return; }
+    
     setRenewingMember(null);
-    await loadMembers();
+    await loadStats();
+    await loadMembers(false, filter, debouncedSearch);
   };
 
   // ---- Auth gates ----
@@ -358,7 +459,7 @@ function App() {
           </div>
 
           <h2 className="card-title">تسجيل الدخول</h2>
-          <p className="card-sub">ادخل بياناتك للوصول لواجهة اعضاء الجيم</p>
+          <p className="card-sub">ادخل بياناتك للوصول لداشبورد الجيم</p>
 
           <label>البريد الإلكتروني</label>
           <input
@@ -385,19 +486,6 @@ function App() {
     );
   }
 
-  // ---- Dashboard data ----
-  const activeCount = members.filter(m => getStatus(m.end_date).key === 'active').length;
-  const expiringCount = members.filter(m => getStatus(m.end_date).key === 'expiring').length;
-  const expiredCount = members.filter(m => getStatus(m.end_date).key === 'expired').length;
-
-  const filteredMembers = members
-    .filter(m => filter === 'all' ? true : getStatus(m.end_date).key === filter)
-    .filter(m => {
-      const q = search.trim();
-      if (!q) return true;
-      return m.name.includes(q) || (m.phone || "").includes(q);
-    });
-
   return (
     <div className="container">
       <div className="app-header">
@@ -409,87 +497,102 @@ function App() {
       </div>
 
       <div className="stat-hero">
-        <div className="stat-number">{activeCount}</div>
+        <div className="stat-number">{stats.active}</div>
         <div className="stat-label">عضو نشط الآن</div>
       </div>
 
       <div className="chips-row">
         <span className={"chip" + (filter === 'all' ? ' active-all' : '')} onClick={() => setFilter('all')}>
-          الكل ({members.length})
+          الكل ({stats.all})
         </span>
         <span className={"chip" + (filter === 'expiring' ? ' active-warn' : '')} onClick={() => setFilter('expiring')}>
-          هيجدد قريب ({expiringCount})
+          هيجدد قريب ({stats.expiring})
         </span>
         <span className={"chip" + (filter === 'expired' ? ' active-danger' : '')} onClick={() => setFilter('expired')}>
-          منتهي ({expiredCount})
+          منتهي ({stats.expired})
         </span>
       </div>
 
       <div className="toolbar">
         <input
           type="text"
-          placeholder="🔍 بحث بالاسم أو رقم الموبايل..."
+          placeholder="🔍 دور بالاسم أو رقم الموبايل..."
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
         <button className="btn-add" onClick={openAddForm}>+ إضافة عضو</button>
       </div>
 
-      {loadingMembers ? (
+      {loadingMembers && members.length === 0 ? (
         <div className="empty-state">جاري تحميل الأعضاء...</div>
-      ) : filteredMembers.length === 0 ? (
+      ) : members.length === 0 ? (
         <div className="empty-state">
           <div className="big">🏋️</div>
-          {members.length === 0
-            ? "لا يوجد أعضاء مسجلين. دوس \"+ إضافة عضو\" عشان تبدأ."
-            : "لا يوجد نتائج مطابقة."}
+          {stats.all === 0
+            ? "لسه مفيش أعضاء مسجلين. دوس \"+ إضافة عضو\" عشان تبدأ."
+            : "مفيش نتائج مطابقة."}
         </div>
       ) : (
-        <div className="members-grid">
-          {filteredMembers.map(m => {
-            const status = getStatus(m.end_date);
-            const dr = daysRemaining(m.end_date);
-            return (
-              <div className="member-card" key={m.id}>
-                <div className="member-top">
-                  <div>
-                    <div className="member-name">{m.name}</div>
-                    <div className="member-phone-row">
-                      <a href={"tel:" + m.phone} className="icon-link" title="اتصال">📞</a>
-                      <a href={toWhatsAppLink(m.phone)} target="_blank" rel="noreferrer" className="icon-link" title="واتساب">💬</a>
-                      <span>{m.phone}</span>
+        <>
+          <div className="members-grid">
+            {members.map(m => {
+              const status = getStatus(m.end_date);
+              const dr = daysRemaining(m.end_date);
+              return (
+                <div className="member-card" key={m.id}>
+                  <div className="member-top">
+                    <div>
+                      <div className="member-name">{m.name}</div>
+                      <div className="member-phone-row">
+                        <a href={"tel:" + m.phone} className="icon-link" title="اتصال">📞</a>
+                        <a href={toWhatsAppLink(m.phone)} target="_blank" rel="noreferrer" className="icon-link" title="واتساب">💬</a>
+                        <span>{m.phone}</span>
+                      </div>
+                    </div>
+                    <span className="badge" style={{ color: status.color, background: status.bg, borderColor: status.border }}>
+                      {status.label}
+                    </span>
+                  </div>
+
+                  <div className="member-dates">
+                    <div><span style={{ color: "var(--muted)" }}>بداية:</span> {m.start_date}</div>
+                    <div><span style={{ color: "var(--muted)" }}>نهاية:</span> {m.end_date}</div>
+                    <div className="days-left" style={{ color: status.color }}>
+                      {status.key === 'expired' ? `منتهي من ${Math.abs(dr)} يوم` : `متبقي ${dr} يوم`}
                     </div>
                   </div>
-                  <span className="badge" style={{ color: status.color, background: status.bg, borderColor: status.border }}>
-                    {status.label}
-                  </span>
-                </div>
 
-                <div className="member-dates">
-                  <div><span style={{ color: "var(--muted)" }}>بداية:</span> {m.start_date}</div>
-                  <div><span style={{ color: "var(--muted)" }}>نهاية:</span> {m.end_date}</div>
-                  <div className="days-left" style={{ color: status.color }}>
-                    {status.key === 'expired' ? `منتهي من ${Math.abs(dr)} يوم` : `متبقي ${dr} يوم`}
+                  {m.notes && <div className="member-notes">📝 {m.notes}</div>}
+
+                  <div className="member-actions">
+                    <button className="small" onClick={() => openRenew(m)}>🔄 تجديد</button>
+                    <button className="small secondary" onClick={() => openEditForm(m)}>✏️ تعديل</button>
+                    <button
+                      className="small danger-btn"
+                      onClick={() => setConfirmAction({
+                        message: `متأكد إنك عايز تمسح "${m.name}" نهائياً؟`,
+                        onConfirm: () => handleDeleteMember(m.id)
+                      })}
+                    >🗑️ حذف</button>
                   </div>
                 </div>
+              );
+            })}
+          </div>
 
-                {m.notes && <div className="member-notes">📝 {m.notes}</div>}
-
-                <div className="member-actions">
-                  <button className="small" onClick={() => openRenew(m)}>🔄 تجديد</button>
-                  <button className="small secondary" onClick={() => openEditForm(m)}>✏️ تعديل</button>
-                  <button
-                    className="small danger-btn"
-                    onClick={() => setConfirmAction({
-                      message: `متأكد إنك عايز تمسح "${m.name}" نهائياً؟`,
-                      onConfirm: () => handleDeleteMember(m.id)
-                    })}
-                  >🗑️ حذف</button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+          {/* زر عرض المزيد */}
+          {hasMore && (
+            <div className="load-more-container">
+              <button 
+                className="btn-load-more" 
+                onClick={() => loadMembers(true, filter, debouncedSearch)}
+                disabled={loadingMembers}
+              >
+                {loadingMembers ? "جاري التحميل..." : "عرض المزيد ⬇️"}
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* ---- Add / Edit modal ---- */}
