@@ -180,7 +180,13 @@ const { useState, useEffect } = React;
 
 const SUPABASE_URL = "https://mfrveljsifglheyrmgbi.supabase.co";
 const SUPABASE_KEY = "sb_publishable_15xYpC6dNvCzbvUi9vuPfQ__xOua0NS";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    storage: window.localStorage
+  }
+});
 
 // ---------- Date helpers ----------
 function getLocalDateStr(d = new Date()) {
